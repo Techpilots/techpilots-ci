@@ -11,12 +11,14 @@ name: Gemensam deploy (statisk)
 on:
   workflow_call:
     inputs:
-      ssh-user: { type: string, required: true }
-      remote-path: { type: string, default: "/" }
+      ssh-user: { type: string, default: "", description: "Tom: används secret DEPLOY_USER" }
+      remote-path: { type: string, default: "", description: "Tom: används secret DEPLOY_PATH, annars /" }
       node-version: { type: string, default: "22" }
     secrets:
       DEPLOY_SSH_KEY: { required: true }
       DEPLOY_HOST: { required: true }
+      DEPLOY_USER: { required: false }
+      DEPLOY_PATH: { required: false }
 
 permissions:
   contents: read
@@ -41,8 +43,8 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           SSH_HOST: ${{ secrets.DEPLOY_HOST }}
-          SSH_USER: ${{ inputs.ssh-user }}
-          REMOTE_PATH: ${{ inputs.remote-path }}
+          SSH_USER: ${{ inputs.ssh-user || secrets.DEPLOY_USER }}
+          REMOTE_PATH: ${{ inputs.remote-path || (secrets.DEPLOY_PATH && format('{0}/', secrets.DEPLOY_PATH)) || '/' }}
         run: |
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
