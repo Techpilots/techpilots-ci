@@ -18,6 +18,7 @@ on:
       cache-dependency-path: { type: string, default: "", description: "Lockfil för cache, om den inte ligger i working-directory" }
       audit: { type: boolean, default: true }
       audit-level: { type: string, default: high }
+      audit-blocking: { type: boolean, default: true, description: "false: rapporterar men stoppar inte" }
       eslint: { type: boolean, default: true }
       stylelint: { type: boolean, default: true }
       stylelint-glob: { type: string, default: "app/**/*.css" }
@@ -52,6 +53,7 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
       - name: Säkerhetsanalys av beroenden (endast produktion)
+        continue-on-error: ${{ !inputs.audit-blocking }}
         run: |
           if [ "${{ inputs.package-manager }}" = "pnpm" ]; then
             pnpm audit --prod --audit-level ${{ inputs.audit-level }}
