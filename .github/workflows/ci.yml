@@ -1,0 +1,161 @@
+# Gemensamt CI-flöde för alla Techpilots-projekt. Anropas från varje repos egen ci.yml:
+#   jobs:
+#     ci:
+#       uses: Nedissa/techpilots-ci/.github/workflows/ci.yml@main
+#       with: { ... }
+# Kontroller: säkerhetsanalys (audit), ESLint, Stylelint, typkontroll, bygge,
+# och för statiska sajter även tillgänglighet (axe-core) och prestanda (Lighthouse).
+# Valfritt: Playwright e2e mot en byggd server.
+name: Gemensam CI
+
+on:
+  workflow_call:
+    inputs:
+      working-directory: { type: string, default: "." }
+      package-manager: { type: string, default: npm, description: "npm eller pnpm" }
+      node-version: { type: string, default: "22" }
+      pnpm-version: { type: string, default: "11" }
+      cache-dependency-path: { type: string, default: "", description: "Lockfil för cache, om den inte ligger i working-directory" }
+      audit: { type: boolean, default: true }
+      audit-level: { type: string, default: high }
+      eslint: { type: boolean, default: true }
+      stylelint: { type: boolean, default: true }
+      stylelint-glob: { type: string, default: "app/**/*.css" }
+      typecheck: { type: boolean, default: true }
+      build: { type: boolean, default: true }
+      env-vars: { type: string, default: "", description: "KEY=VALUE, en per rad, för bygget" }
+      static-site: { type: boolean, default: false, description: "Kör axe och Lighthouse mot out/" }
+      lighthouse-paths: { type: string, default: "/", description: "Sökvägar, mellanslagsseparerade" }
+      e2e: { type: boolean, default: false }
+      e2e-command: { type: string, default: "playwright test" }
+      e2e-start: { type: string, default: "next start -p 3001", description: "Startar servern för e2e" }
+      e2e-url: { type: string, default: "http://localhost:3001" }
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: inputs.audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        if: inputs.package-manager == 'pnpm'
+        with:
+          version: ${{ inputs.pnpm-version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: Säkerhetsanalys av beroenden (endast produktion)
+        run: |
+          if [ "${{ inputs.package-manager }}" = "pnpm" ]; then
+            pnpm audit --prod --audit-level ${{ inputs.audit-level }}
+          else
+            npm audit --omit=dev --audit-level=${{ inputs.audit-level }}
+          fi
+
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    env:
+      EXEC: ${{ inputs.package-manager == 'pnpm' && 'pnpm exec' || 'npx --no-install' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        if: inputs.package-manager == 'pnpm'
+        with:
+          version: ${{ inputs.pnpm-version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.package-manager }}
+          cache-dependency-path: ${{ inputs.cache-dependency-path || format('{0}/{1}', inputs.working-directory, inputs.package-manager == 'pnpm' && 'pnpm-lock.yaml' || 'package-lock.json') }}
+      - name: Installera beroenden
+        run: |
+          if [ "${{ inputs.package-manager }}" = "pnpm" ]; then pnpm install --frozen-lockfile; else npm ci; fi
+      - name: Miljövariabler för bygget
+        if: inputs.env-vars != ''
+        env:
+          VARS: ${{ inputs.env-vars }}
+        run: printf '%s\n' "$VARS" >> "$GITHUB_ENV"
+      - name: ESLint
+        if: inputs.eslint
+        run: $EXEC eslint .
+      - name: CSS-lint
+        if: inputs.stylelint
+        run: $EXEC stylelint "${{ inputs.stylelint-glob }}"
+      - name: Typkontroll
+        if: inputs.typecheck
+        run: |
+          if ls next.config.* >/dev/null 2>&1; then $EXEC next typegen; fi
+          $EXEC tsc --noEmit
+      - name: Bygg
+        if: inputs.build
+        run: |
+          if [ "${{ inputs.package-manager }}" = "pnpm" ]; then pnpm run build; else npm run build; fi
+
+      # ---- Tillgänglighet och prestanda (statiska sajter) ----
+      - name: Hämta delade CI-skript
+        if: inputs.static-site
+        uses: actions/checkout@v4
+        with:
+          repository: Nedissa/techpilots-ci
+          ref: ${{ github.job_workflow_sha || 'main' }}
+          path: ci-scripts
+      - name: Installera skriptberoenden och Chromium
+        if: inputs.static-site
+        working-directory: ci-scripts
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Starta statisk server
+        if: inputs.static-site
+        run: |
+          node "$GITHUB_WORKSPACE/ci-scripts/scripts/serve.mjs" out 4173 &
+          for i in $(seq 1 30); do curl -sf http://localhost:4173/ >/dev/null && break; sleep 1; done
+      - name: Tillgänglighet (axe-core, WCAG 2.1 AA)
+        if: inputs.static-site
+        working-directory: ci-scripts
+        run: node scripts/a11y.mjs "$GITHUB_WORKSPACE/${{ inputs.working-directory }}/out" http://localhost:4173
+      - name: Prestanda (Lighthouse)
+        if: inputs.static-site
+        run: |
+          args=""
+          for p in ${{ inputs.lighthouse-paths }}; do args="$args --collect.url=http://localhost:4173$p"; done
+          npx --yes @lhci/cli@0.15 autorun --config="$GITHUB_WORKSPACE/ci-scripts/lighthouserc.json" $args
+      - name: Ladda upp Lighthouse-rapport
+        if: always() && inputs.static-site
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse
+          path: ${{ inputs.working-directory }}/.lighthouseci
+          if-no-files-found: ignore
+
+      # ---- Playwright e2e ----
+      - name: Installera Playwright-webbläsare
+        if: inputs.e2e
+        run: $EXEC playwright install --with-deps chromium
+      - name: Playwright e2e
+        if: inputs.e2e
+        env:
+          BASE_URL: ${{ inputs.e2e-url }}
+          CI: "true"
+        run: |
+          $EXEC ${{ inputs.e2e-start }} &
+          for i in $(seq 1 60); do curl -sf "$BASE_URL" >/dev/null && break; sleep 1; done
+          $EXEC ${{ inputs.e2e-command }}
+      - name: Ladda upp Playwright-rapport
+        if: failure() && inputs.e2e
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: ${{ inputs.working-directory }}/playwright-report
+          if-no-files-found: ignore

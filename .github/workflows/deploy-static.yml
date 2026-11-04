@@ -1,0 +1,51 @@
+# Gemensam deploy för statiska kundsajter (output: "export"). Byggs och laddas upp via rsync/SSH.
+# Anropas från projektets deploy.yml vid push till main:
+#   jobs:
+#     deploy:
+#       uses: Nedissa/techpilots-ci/.github/workflows/deploy-static.yml@main
+#       with: { ssh-user: webdeploy, remote-path: "/" }
+#       secrets: inherit
+# Kräver secrets DEPLOY_SSH_KEY och DEPLOY_HOST samt variablerna FORMS_URL, SITE_URL och GTM_ID i repot.
+name: Gemensam deploy (statisk)
+
+on:
+  workflow_call:
+    inputs:
+      ssh-user: { type: string, required: true }
+      remote-path: { type: string, default: "/" }
+      node-version: { type: string, default: "22" }
+    secrets:
+      DEPLOY_SSH_KEY: { required: true }
+      DEPLOY_HOST: { required: true }
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_FORMS_URL: ${{ vars.FORMS_URL }}
+          NEXT_PUBLIC_SITE_URL: ${{ vars.SITE_URL }}
+          NEXT_PUBLIC_GTM_ID: ${{ vars.GTM_ID }}
+      - name: Ladda upp till servern
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_USER: ${{ inputs.ssh-user }}
+          REMOTE_PATH: ${{ inputs.remote-path }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+          rsync -az --delete -e "ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes" out/ "$SSH_USER@$SSH_HOST:$REMOTE_PATH"

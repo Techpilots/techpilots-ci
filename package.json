@@ -1,0 +1,10 @@
+{
+  "name": "techpilots-ci",
+  "private": true,
+  "type": "module",
+  "description": "Delade CI/CD-skript (tillgänglighet, statisk server) för Techpilots-projekt",
+  "dependencies": {
+    "@axe-core/playwright": "^4.10.0",
+    "playwright": "^1.60.0"
+  }
+}
