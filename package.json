@@ -1,5 +1,5 @@
 {
-  "name": "techpilots-ci",
+  "name": "techpilots-cicd",
   "private": true,
   "type": "module",
   "description": "Delade CI/CD-skript (tillgänglighet, statisk server) för Techpilots-projekt",
