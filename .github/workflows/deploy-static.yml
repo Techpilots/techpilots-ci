@@ -2,7 +2,7 @@
 # Anropas från projektets deploy.yml vid push till main:
 #   jobs:
 #     deploy:
-#       uses: Techpilots/techpilots-ci/.github/workflows/deploy-static.yml@main
+#       uses: Techpilots/techpilots-cicd/.github/workflows/deploy-static.yml@main
 #       with: { ssh-user: webdeploy, remote-path: "/" }
 #       secrets: inherit
 # Kräver secrets DEPLOY_SSH_KEY och DEPLOY_HOST samt variablerna FORMS_URL, SITE_URL och GTM_ID i repot.

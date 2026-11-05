@@ -1,4 +1,4 @@
-# techpilots-ci
+# techpilots-cicd
 
 Gemensamt CI/CD-flöde för alla Techpilots-projekt. Repot måste vara publikt (eller ha Actions-åtkomst
 inställd under Settings > Actions > General > Access) eftersom andra repon anropar och checkar ut det.
@@ -29,7 +29,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   ci:
-    uses: Techpilots/techpilots-ci/.github/workflows/ci.yml@main
+    uses: Techpilots/techpilots-cicd/.github/workflows/ci.yml@main
     with:
       static-site: true
 ```
