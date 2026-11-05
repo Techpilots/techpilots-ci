@@ -1,7 +1,7 @@
 # Gemensamt CI-flöde för alla Techpilots-projekt. Anropas från varje repos egen ci.yml:
 #   jobs:
 #     ci:
-#       uses: Techpilots/techpilots-ci/.github/workflows/ci.yml@main
+#       uses: Techpilots/techpilots-cicd/.github/workflows/ci.yml@main
 #       with: { ... }
 # Kontroller: säkerhetsanalys (audit), ESLint, Stylelint, typkontroll, bygge,
 # och för statiska sajter även tillgänglighet (axe-core) och prestanda (Lighthouse).
@@ -109,7 +109,7 @@ jobs:
         if: inputs.static-site
         uses: actions/checkout@v4
         with:
-          repository: Techpilots/techpilots-ci
+          repository: Techpilots/techpilots-cicd
           ref: ${{ github.job_workflow_sha || 'main' }}
           path: ci-scripts
       - name: Installera skriptberoenden och Chromium
