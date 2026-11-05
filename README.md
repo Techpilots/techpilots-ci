@@ -29,7 +29,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   ci:
-    uses: Nedissa/techpilots-ci/.github/workflows/ci.yml@main
+    uses: Techpilots/techpilots-ci/.github/workflows/ci.yml@main
     with:
       static-site: true
 ```
